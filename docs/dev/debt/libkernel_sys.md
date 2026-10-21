@@ -3,6 +3,10 @@
 ### Silent stubs
 - [fchmodat](../../../core/libs/prx/libkernel_sys/Export.cpp) (libkernel_sys) - `AT_SYMLINK_NOFOLLOW` on a symbolic link (on Windows and Linux)
 
+### Unknown function info
+
+- [sceKernelGetCompiledSdkVersion](../../../core/libs/prx/libkernel_sys/Export.cpp) (libkernel_sys) - the `(int32_t*)` signature and `EINVAL` for a null pointer follow shadPS4's [implementation](https://github.com/shadps4-emu/shadPS4/blob/b6ea82c94219b73a97d95efeb5ff41ff43230aa8/src/core/libraries/kernel/process.cpp#L56-L62); the version is read from offset 0x10 of the title's process parameters, as [libSceHmd2](../../../core/libs/prx/libSceHmd2/Export.cpp) reads it. Not measured on a console.
+
 ### Functional
 
 - [fchdir](../../../core/libs/prx/libkernel_sys/Export.cpp) (libkernel_sys) changes the guest working directory to the descriptor's directory: on Windows through the path recorded when the descriptor was opened, on Linux through the `/proc/self/fd` link target. It returns `EBADF` for a descriptor that is not open and `ENOTDIR` for one that is not a directory. Outside Windows it checks search permission on the directory with `faccessat`, which fails with `EACCES` as FreeBSD `change_dir` does; on Windows that check is not modelled. A directory renamed after it was opened is still reached through the recorded path. Console behaviour is unverified

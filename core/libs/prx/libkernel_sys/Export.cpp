@@ -19,6 +19,8 @@
 #endif
 #include "SceTypes.hpp"
 #include "prx/libc/include/General.hpp"
+#include "prx/libc/include/ApplicationHeap.hpp"
+#include "prx/libkernel/KernelErrors.hpp"
 #include "prx/libc/include/FilesystemError.hpp"
 #include "prx/libkernel/File/include/DirectoryDescriptor.hpp"
 #include "prx/libc/include/CreationMask.hpp"
@@ -687,6 +689,12 @@ int APS5_VABI renameat_nid_postfix(int oldfd, const char* from, int newfd, const
     if (error) return static_cast<int>(Fail(error));
     RecordWrittenPath_nid_no_patch(source);
     RecordWrittenPath_nid_no_patch(destination);
+    return 0;
+}
+
+int APS5_VABI sceKernelGetCompiledSdkVersion(std::int32_t* version) {
+    if (!version) return SCE_KERNEL_ERROR_EINVAL;
+    std::memcpy(version, static_cast<const std::byte*>(ApplicationProcessParameters_nid_no_patch()) + 0x10, sizeof(*version));
     return 0;
 }
 

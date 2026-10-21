@@ -2,6 +2,8 @@
 #include "prx/libc/include/general/VabiMacros.hpp"
 #include "prx/libc/include/RemoveTree.hpp"
 #include "prx/libkernel/File/include/FileFlags.hpp"
+#include "ProcessParametersFixture.hpp"
+#include "prx/libkernel/KernelErrors.hpp"
 #include "SceTypes.hpp"
 #include <array>
 #include <chrono>
@@ -60,6 +62,7 @@ int APS5_VABI fstatat_nid_postfix(int, const char*, FileStat*, int);
 std::int64_t APS5_VABI sceKernelRead(int, void*, std::size_t);
 std::uint16_t APS5_VABI umask_nid_postfix(std::uint16_t);
 int* APS5_VABI __error_nid_postfix();
+int APS5_VABI sceKernelGetCompiledSdkVersion(std::int32_t*);
 }
 
 void Require(bool condition, std::source_location location = std::source_location::current()) {
@@ -256,7 +259,23 @@ void DirectoryRenameTests(const std::filesystem::path& parent) {
     Require(std::filesystem::remove(original) && std::filesystem::remove(moved) && std::filesystem::remove(fixture));
 }
 
+alignas(16) std::array<std::byte, 0x40> g_processParameters{};
+
+void CheckCompiledSdkVersion() {
+    const std::uint64_t size = g_processParameters.size();
+    const std::uint32_t magic = 0x4942524f;
+    const std::uint32_t sdkVersion = 0x05508001;
+    std::memcpy(g_processParameters.data(), &size, sizeof(size));
+    std::memcpy(g_processParameters.data() + 8, &magic, sizeof(magic));
+    std::memcpy(g_processParameters.data() + 0x10, &sdkVersion, sizeof(sdkVersion));
+    Require(ProcessParametersFixture::Install(g_processParameters.data(), g_processParameters.size()));
+    Require(sceKernelGetCompiledSdkVersion(nullptr) == SCE_KERNEL_ERROR_EINVAL);
+    std::int32_t version = 0;
+    Require(sceKernelGetCompiledSdkVersion(&version) == 0 && static_cast<std::uint32_t>(version) == sdkVersion);
+}
+
 int main() {
+    CheckCompiledSdkVersion();
 #ifdef _WIN32
     auto hostDirectorySpelling = std::filesystem::current_path().native();
     CharUpperBuffW(hostDirectorySpelling.data(), static_cast<DWORD>(hostDirectorySpelling.size()));
