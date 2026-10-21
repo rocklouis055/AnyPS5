@@ -2,6 +2,7 @@
 #include "prx/libc/include/general/VabiMacros.hpp"
 #include "prx/libc/include/RemoveTree.hpp"
 #include "prx/libkernel/File/include/FileFlags.hpp"
+#include "prx/libkernel/KernelErrors.hpp"
 #include "SceTypes.hpp"
 #include <array>
 #include <chrono>
@@ -15,6 +16,7 @@
 #include <stdexcept>
 #include <set>
 #include <string>
+#include <vector>
 #ifdef _WIN32
 #include <windows.h>
 #ifndef SYMBOLIC_LINK_FLAG_ALLOW_UNPRIVILEGED_CREATE
@@ -60,6 +62,10 @@ int APS5_VABI fstatat_nid_postfix(int, const char*, FileStat*, int);
 std::int64_t APS5_VABI sceKernelRead(int, void*, std::size_t);
 std::uint16_t APS5_VABI umask_nid_postfix(std::uint16_t);
 int* APS5_VABI __error_nid_postfix();
+int APS5_VABI sceKernelGetModuleList(KernelModule*, std::size_t, std::size_t*);
+int APS5_VABI sceKernelGetModuleInfo(KernelModule, ModuleInfo*);
+int APS5_VABI sceKernelGetModuleInfo2(KernelModule, ModuleInfo*);
+int APS5_VABI sceKernelGetModuleInfoInternal(KernelModule, ModuleInfoEx*);
 }
 
 void Require(bool condition, std::source_location location = std::source_location::current()) {
@@ -256,7 +262,40 @@ void DirectoryRenameTests(const std::filesystem::path& parent) {
     Require(std::filesystem::remove(original) && std::filesystem::remove(moved) && std::filesystem::remove(fixture));
 }
 
+void CheckModuleInfoInternal() {
+    std::vector<KernelModule> handles(256, -1);
+    std::size_t count = 0;
+    Require(sceKernelGetModuleList(handles.data(), handles.size(), &count) == 0 && count > 1);
+    handles.resize(count);
+    bool systemModule = false;
+    for (const auto handle : handles) {
+        ModuleInfo basic{};
+        basic.st_size = sizeof(basic);
+        Require(sceKernelGetModuleInfo(handle, &basic) == 0);
+        ModuleInfoEx info{};
+        info.st_size = sizeof(info);
+        Require(sceKernelGetModuleInfoInternal(handle, &info) == 0);
+        Require(info.st_size == sizeof(info) && info.id == handle && std::strcmp(info.name, basic.name) == 0);
+        Require(info.segment_count == basic.segment_count && info.segment_count > 0 && info.ref_count == 1);
+        for (std::uint32_t i = 0; i < info.segment_count; ++i)
+            Require(info.segments[i].address == basic.segments[i].address && info.segments[i].size == basic.segments[i].size && info.segments[i].prot == basic.segments[i].prot);
+        ModuleInfo title{};
+        title.st_size = sizeof(title);
+        if (sceKernelGetModuleInfo2(handle, &title) == SCE_KERNEL_ERROR_EPERM) systemModule = true;
+    }
+    Require(systemModule);
+    ModuleInfoEx sized{};
+    sized.st_size = sizeof(ModuleInfo);
+    sized.name[0] = 'x';
+    Require(sceKernelGetModuleInfoInternal(handles.front(), &sized) == SCE_KERNEL_ERROR_EINVAL && sized.name[0] == 'x');
+    Require(sceKernelGetModuleInfoInternal(handles.front(), nullptr) == SCE_KERNEL_ERROR_EFAULT);
+    ModuleInfoEx unknown{};
+    unknown.st_size = sizeof(unknown);
+    Require(sceKernelGetModuleInfoInternal(-1, &unknown) == SCE_KERNEL_ERROR_ESRCH && unknown.name[0] == '\0');
+}
+
 int main() {
+    CheckModuleInfoInternal();
 #ifdef _WIN32
     auto hostDirectorySpelling = std::filesystem::current_path().native();
     CharUpperBuffW(hostDirectorySpelling.data(), static_cast<DWORD>(hostDirectorySpelling.size()));

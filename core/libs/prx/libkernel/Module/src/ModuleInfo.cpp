@@ -356,21 +356,23 @@ bool SystemImage(const GuestImage& image) {
 }
 #endif
 
-int FillModuleInfo(KernelModule handle, ModuleInfo* info, bool titleOnly) {
+template<typename TInfo>
+int FillModuleInfo(KernelModule handle, TInfo* info, bool titleOnly) {
     if (!info) return SCE_KERNEL_ERROR_EFAULT;
-    if (info->st_size != sizeof(ModuleInfo)) return SCE_KERNEL_ERROR_EINVAL;
+    if (info->st_size != sizeof(TInfo)) return SCE_KERNEL_ERROR_EINVAL;
     for (const auto& image : GuestImages()) {
         if (ModuleIdForImage_nid_no_patch(image.native) != handle) continue;
         if (titleOnly && SystemImage(image)) return SCE_KERNEL_ERROR_EPERM;
-        ModuleInfo result{};
-        result.st_size = sizeof(ModuleInfo);
+        TInfo result{};
+        result.st_size = sizeof(TInfo);
 #ifdef _WIN32
         if (!Fill(image.address, result)) return SCE_KERNEL_ERROR_ESRCH;
 #else
-        ImageSearch<ModuleInfo> search{image.address, &result, false};
-        dl_iterate_phdr(FindImage<ModuleInfo>, &search);
+        ImageSearch<TInfo> search{image.address, &result, false};
+        dl_iterate_phdr(FindImage<TInfo>, &search);
         if (!search.found) return SCE_KERNEL_ERROR_ESRCH;
 #endif
+        if constexpr (Extended<TInfo>) result.id = handle;
         *info = result;
         return 0;
     }
@@ -426,6 +428,10 @@ int APS5_VABI sceKernelGetModuleInfo(KernelModule handle, ModuleInfo* info) {
 
 int APS5_VABI sceKernelGetModuleInfo2(KernelModule handle, ModuleInfo* info) {
     return FillModuleInfo(handle, info, true);
+}
+
+int APS5_VABI GetModuleInfoEx_nid_no_patch(KernelModule handle, ModuleInfoEx* info) {
+    return FillModuleInfo(handle, info, false);
 }
 
 std::int32_t APS5_VABI sceKernelGetLibkernelTextLocation_nid_postfix(void** address, std::size_t* size) {

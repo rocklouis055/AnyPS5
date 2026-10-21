@@ -37,6 +37,7 @@
 #endif
 
 extern "C" int* APS5_VABI __error_nid_postfix();
+extern "C" int APS5_VABI GetModuleInfoEx_nid_no_patch(KernelModule handle, ModuleInfoEx* info);
 
 namespace {
 #ifdef _WIN32
@@ -688,6 +689,10 @@ int APS5_VABI renameat_nid_postfix(int oldfd, const char* from, int newfd, const
     RecordWrittenPath_nid_no_patch(source);
     RecordWrittenPath_nid_no_patch(destination);
     return 0;
+}
+
+int APS5_VABI sceKernelGetModuleInfoInternal(KernelModule handle, ModuleInfoEx* info) {
+    return GetModuleInfoEx_nid_no_patch(handle, info);
 }
 
 }
